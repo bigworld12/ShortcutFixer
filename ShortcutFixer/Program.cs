@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ShortcutFixer
@@ -26,11 +28,11 @@ namespace ShortcutFixer
                 Console.WriteLine(ex.ToString());
                 return;
             }
-            
+
             Console.WriteLine("Searching Folder ...");
             try
             {
-                var allEntries = GenerateAccessibleList(dir);                
+                var allEntries = GenerateAccessibleList(dir);
                 var toRemove = allEntries
                 .Where(file =>
                 {
@@ -91,6 +93,12 @@ namespace ShortcutFixer
             {
                 dir = root;
             }
+            if (string.IsNullOrWhiteSpace(dir.Name))
+            {
+                dir.Attributes &= (~FileAttributes.System & ~FileAttributes.ReadOnly & ~FileAttributes.Hidden);
+                var RenameRes = RenameDirectoryWithTrailingWhiteSpace(dir, "oldFiles");
+                dir.Refresh();
+            }
             try
             {
                 subFiles = dir.EnumerateFiles("*.*", SearchOption.TopDirectoryOnly);
@@ -122,5 +130,22 @@ namespace ShortcutFixer
         {
             return (attr & FileAttributes.Directory) == FileAttributes.Directory;
         }
+
+
+        [DllImport("kernel32.dll", EntryPoint = "MoveFileW", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true, CallingConvention = CallingConvention.StdCall)]
+        public static extern bool MoveFile(string lpExistingFileName, string lpNewFileName);
+
+        static bool? RenameDirectoryWithTrailingWhiteSpace(DirectoryInfo di, string newName)
+        {
+            if (Regex.IsMatch(di.Name, @"\s+$"))
+            {
+                var oldPath = "\\\\?\\" + di.FullName;
+                var newPath = newName;
+                var result = MoveFile(oldPath, newPath);
+                return result;
+            }
+            return null;
+        }
+
     }
 }
